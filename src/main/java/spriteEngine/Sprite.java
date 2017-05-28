@@ -5,20 +5,20 @@ package spriteEngine;
  */
 public abstract class Sprite {
     public Square square;
-    public int priority;
+    public int drawPriority;
     public int dx, dy;
     public String collisionDetectStyle;
 
-    public Sprite (Square square, int priority, String collistionDetectStyle) {
+    public Sprite (Square square, int drawPriority, String collistionDetectStyle) {
         this.square = square;
-        this.priority = priority;
+        this.drawPriority = drawPriority;
         this.dx = 0;
         this.dy = 0;
         this.collisionDetectStyle = collistionDetectStyle;
     }
 
     /**
-     * set the Squareitional difference of next frame.
+     * set the positional difference of next frame.
      */
     public void setDiff(int dx, int dy){
         this.dx = dx;
@@ -26,4 +26,9 @@ public abstract class Sprite {
     }
 
     public abstract void draw();
+
+    /**
+     * Call when touch other sprites, their {@link Collision} derived from each other's {@code collisionDetectStyle} is not {@code None}.
+     */
+    public abstract void whenTouch(Sprite thatSprite, Collision collision);
 }

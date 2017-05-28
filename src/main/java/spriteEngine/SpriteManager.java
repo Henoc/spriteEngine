@@ -3,9 +3,13 @@ package spriteEngine;
 import io.vavr.collection.HashMultimap;
 import io.vavr.collection.List;
 import io.vavr.collection.Multimap;
+import io.vavr.collection.PriorityQueue;
 import io.vavr.collection.SortedMultimap;
 import io.vavr.collection.TreeMultimap;
 import io.vavr.collection.Set;
+
+import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
@@ -18,11 +22,12 @@ public class SpriteManager {
     private List<Sprite> sprites;
     private SortedMultimap<Integer,Sprite> drawOrderBaseSpriteMap;
     private Multimap<String,Sprite> collisionStyleBaseSpriteMap;
-    private BiPredicate<String,String> collisionStyleFunction;
+    private BiFunction<String,String,Collision> collisionStyleFunction;
+    private final double EPS = 0.000001;
 
-    public SpriteManager (List<Sprite> sprites, BiPredicate<String,String> collisionStyleFunction) {
+    public SpriteManager (List<Sprite> sprites, BiFunction<String,String,Collision> collisionStyleFunction) {
         this.sprites = sprites;
-        this.drawOrderBaseSpriteMap = sprites.foldLeft(TreeMultimap.withSeq().empty(), (multiMap, sprite) -> multiMap.put(sprite.priority, sprite));
+        this.drawOrderBaseSpriteMap = sprites.foldLeft(TreeMultimap.withSeq().empty(), (multiMap, sprite) -> multiMap.put(sprite.drawPriority, sprite));
         this.collisionStyleBaseSpriteMap = sprites.foldLeft(HashMultimap.withSeq().empty(), (multiMap, sprite) -> multiMap.put(sprite.collisionDetectStyle, sprite));
         this.collisionStyleFunction = collisionStyleFunction;
     }
@@ -38,29 +43,34 @@ public class SpriteManager {
      * move sprites in accordance with {@link Sprite} dx,dy.
      */
     public void move(){
-        List<MoveFactor> moveFactors = List.empty();
+        PriorityQueue<MoveFactor> moveFactors = PriorityQueue();
         for (Sprite sprite : sprites) {
             double rdx = 1.0 / sprite.dx, rdy = 1.0 / sprite.dy;
-            for(int i = 0; i < sprite.dx; i++){
-                moveFactors = moveFactors.append(new MoveFactor(rdx, Dimension.X, sprite));
-            }
-            for(int i = 0; i < sprite.dy; i++){
-                moveFactors = moveFactors.append(new MoveFactor(rdy, Dimension.Y, sprite));
-            }
+            moveFactors = moveFactors.enqueue(new MoveFactor(rdx, Dimension.X, sprite));
+            moveFactors = moveFactors.enqueue(new MoveFactor(rdy, Dimension.Y, sprite));
         }
-        moveFactors.sorted().forEach(moveFactor -> {
+        while(!moveFactors.isEmpty()){
+            MoveFactor moveFactor = moveFactors.head();
+            moveFactors = moveFactors.tail();
             Sprite thisSprite = moveFactor.sprite;
             boolean canMove = true;
 
-            Predicate<String> cstylePred = thatStyle -> collisionStyleFunction.test(thisSprite.collisionDetectStyle, thatStyle);
+            Function<String, Collision> cstyleFn = thatStyle -> collisionStyleFunction.apply(thisSprite.collisionDetectStyle, thatStyle);
 
-            for (Sprite thatSprite : collisionStyleBaseSpriteMap.filterKeys(cstylePred).values())  {
+            for (Sprite thatSprite : collisionStyleBaseSpriteMap.filterKeys(style -> cstyleFn.apply(style) != Collision.None).values())  {
+                Collision collision = cstyleFn.apply(thatSprite.collisionDetectStyle);
                 if(thisSprite.square.isTouch(moveFactor.dir ,thatSprite.square)){
-                    canMove = false;
+                    if(collision == Collision.Bump) canMove = false;
+                    thisSprite.whenTouch(thatSprite, collision);
                 }
             }
             if(canMove) thisSprite.square.add(moveFactor.dir.toPos());
-        });
+
+            double rd = 1.0 / (moveFactor.d == Dimension.X ? thisSprite.dx : thisSprite.dy);
+            if(moveFactor.priority + rd < 1.0 + EPS) {
+                moveFactors = moveFactors.enqueue(new MoveFactor(moveFactor.priority + rd, moveFactor.d, thisSprite));
+            }
+        }
     }
 
     private static class MoveFactor implements Comparable<MoveFactor>{

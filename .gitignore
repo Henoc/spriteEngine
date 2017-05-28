@@ -2,4 +2,7 @@
 .project
 .settings/
 .vscode/
+.idea/
 target/
+spriteEngine.iml
+

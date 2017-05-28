@@ -15,8 +15,8 @@ public class Square {
     }
 
     void add(Position delta){
-        x += delta.x;
-        y += delta.y;
+        x += delta.x();
+        y += delta.y();
     }
 
     boolean isInterlappedX(Square that){
